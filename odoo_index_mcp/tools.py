@@ -86,11 +86,17 @@ def search_odoo_index(
 
             concise_results.append(concise_item)
 
+        # Calculate pagination info
+        has_more = (offset + len(concise_results)) < total
+        next_offset = offset + limit if has_more else None
+
         return {
             'total': total,
             'limit': limit,
             'offset': offset,
             'returned': len(concise_results),
+            'has_more': has_more,
+            'next_offset': next_offset,
             'results': concise_results
         }
     except Exception as e:
@@ -263,12 +269,16 @@ def search_by_attribute(
         # Apply pagination
         total = len(matching_items)
         paginated_items = matching_items[offset:offset + limit]
+        has_more = (offset + len(paginated_items)) < total
+        next_offset = offset + limit if has_more else None
 
         return {
             'total': total,
             'limit': limit,
             'offset': offset,
             'returned': len(paginated_items),
+            'has_more': has_more,
+            'next_offset': next_offset,
             'results': paginated_items
         }
     except Exception as e:
@@ -339,12 +349,16 @@ def search_xml_id(
         # Apply pagination
         total = len(items)
         paginated_items = items[offset:offset + limit]
+        has_more = (offset + len(paginated_items)) < total
+        next_offset = offset + limit if has_more else None
 
         return {
             'total': total,
             'limit': limit,
             'offset': offset,
             'returned': len(paginated_items),
+            'has_more': has_more,
+            'next_offset': next_offset,
             'results': paginated_items
         }
     except Exception as e:

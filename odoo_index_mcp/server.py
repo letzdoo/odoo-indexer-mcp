@@ -39,6 +39,9 @@ def search_odoo_index(
 
     Use get_item_details() if you need full details about a specific item.
 
+    PAGINATION: Results include 'has_more' and 'next_offset' fields. If has_more=true,
+    call again with offset=next_offset to get more results.
+
     Args:
         query: Search term (supports SQL LIKE patterns with %)
         item_type: Filter by type (model/field/function/view/menu/action/etc)
@@ -48,7 +51,13 @@ def search_odoo_index(
         offset: Number of results to skip for pagination (default: 0)
 
     Returns:
-        Concise search results with file locations and key info only
+        {
+            total: Total matching items,
+            returned: Number of items in this page,
+            has_more: Whether more results are available,
+            next_offset: Offset to use for next page (null if no more),
+            results: Array of concise item data
+        }
     """
     limit = min(limit, 50)  # Cap at 50
     return tools.search_odoo_index(query, item_type, module, parent_name, limit, offset)
