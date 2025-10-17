@@ -164,7 +164,7 @@ class OdooIndexer:
             module_path: Path to module directory
             incremental: If True, skip unchanged files
         """
-        logger.info(f"Indexing module: {module_name}")
+        logger.info(f"[START] Indexing module: {module_name}")
 
         try:
             # First, index the manifest
@@ -201,7 +201,10 @@ class OdooIndexer:
                 files_to_index = filtered_files
 
             if not files_to_index:
+                logger.info(f"[DONE] Module {module_name}: No files to index")
                 return
+
+            logger.info(f"[PARSING] Module {module_name}: {len(files_to_index)} files")
 
             # Parse all files in parallel using the persistent process pool
             loop = asyncio.get_running_loop()
@@ -210,6 +213,8 @@ class OdooIndexer:
                 for file_path in files_to_index
             ]
             results = await asyncio.gather(*parse_tasks, return_exceptions=True)
+
+            logger.info(f"[PARSED] Module {module_name}: {len(results)} results")
 
             # Store results
             for result in results:
@@ -225,8 +230,10 @@ class OdooIndexer:
                     await self._store_items(items, relative_path, module_name, file_hash, module_depth)
                     logger.debug(f"Indexed {len(items)} items from {relative_path}")
 
+            logger.info(f"[COMPLETE] Module {module_name}: indexed successfully")
+
         except Exception as e:
-            logger.error(f"Error indexing module {module_name}: {e}")
+            logger.error(f"[ERROR] Module {module_name}: {e}", exc_info=True)
 
 
     async def _store_items(self, items: list[dict], file_path: str, module_name: str,
