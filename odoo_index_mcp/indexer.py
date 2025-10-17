@@ -101,17 +101,27 @@ class OdooIndexer:
         try:
             # Index modules concurrently
             semaphore = asyncio.Semaphore(config.MAX_CONCURRENT_MODULES)
+            completed_count = 0
+            total_count = len(modules)
 
             async def index_with_semaphore(module_name: str, module_path: Path):
+                nonlocal completed_count
                 async with semaphore:
-                    await self.index_module(module_name, module_path, incremental)
+                    try:
+                        await self.index_module(module_name, module_path, incremental)
+                        completed_count += 1
+                        if completed_count % 10 == 0 or completed_count == total_count:
+                            logger.info(f"Progress: {completed_count}/{total_count} modules indexed")
+                    except Exception as e:
+                        logger.error(f"Failed to index module {module_name}: {e}", exc_info=True)
+                        completed_count += 1
 
             tasks = [
                 index_with_semaphore(module_name, module_path)
                 for module_name, module_path in modules.items()
             ]
 
-            await asyncio.gather(*tasks, return_exceptions=True)
+            await asyncio.gather(*tasks)
         finally:
             # Shutdown process pool
             logger.info("Shutting down process pool")
