@@ -15,9 +15,7 @@ if not ODOO_PATH or not ODOO_PATH.exists():
     )
 
 # Optional settings
-# Resolve SQLITE_DB_PATH relative to this config file's directory (project root/odoo_index_mcp/)
-_default_db_path = Path(__file__).parent / 'odoo_index.db'
-SQLITE_DB_PATH = Path(os.getenv('SQLITE_DB_PATH', str(_default_db_path)))
+SQLITE_DB_PATH = Path(os.getenv('SQLITE_DB_PATH', './odoo_index.db'))
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
 MAX_CONCURRENT_MODULES = int(os.getenv('MAX_CONCURRENT_MODULES', '4'))
 MAX_WORKER_PROCESSES = int(os.getenv('MAX_WORKER_PROCESSES', '0'))  # 0 = use CPU count
