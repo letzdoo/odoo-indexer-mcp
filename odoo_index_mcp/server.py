@@ -173,9 +173,25 @@ def search_xml_id(
     return tools.search_xml_id(query, module, limit, offset)
 
 
+# Global variable to track indexing status
+_indexing_status = {
+    "is_running": False,
+    "start_time": None,
+    "incremental": None,
+    "modules": None
+}
+
+
 async def _run_indexing_task(incremental: bool, module_filter: Optional[list[str]], clear_db: bool):
     """Background task to run indexing."""
+    global _indexing_status
     try:
+        import time
+        _indexing_status["is_running"] = True
+        _indexing_status["start_time"] = time.time()
+        _indexing_status["incremental"] = incremental
+        _indexing_status["modules"] = module_filter
+
         logger.info(f"Background indexing started (incremental={incremental}, modules={module_filter}, clear_db={clear_db})")
         await index_odoo_codebase(
             incremental=incremental,
@@ -185,6 +201,9 @@ async def _run_indexing_task(incremental: bool, module_filter: Optional[list[str
         logger.info("Background indexing completed successfully")
     except Exception as e:
         logger.error(f"Background indexing failed: {e}", exc_info=True)
+    finally:
+        _indexing_status["is_running"] = False
+        _indexing_status["start_time"] = None
 
 
 @mcp.tool()
@@ -243,6 +262,74 @@ async def update_index(
         }
 
 
+@mcp.tool()
+def get_index_status() -> dict:
+    """Get the current status of the index and any ongoing indexing operations.
+
+    Returns information about:
+    - Whether indexing is currently running
+    - Total number of indexed items
+    - Number of modules indexed
+    - Breakdown by item type
+    - Indexing progress (if running)
+
+    Returns:
+        Status information including item counts and indexing state
+    """
+    try:
+        import time
+        db = Database(config.SQLITE_DB_PATH)
+
+        # Get total items and modules count
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Total items
+            cursor.execute("SELECT COUNT(*) as count FROM indexed_items")
+            row = cursor.fetchone()
+            total_items = row['count'] if row else 0
+
+            # Total modules
+            cursor.execute("SELECT COUNT(DISTINCT module) as count FROM indexed_items")
+            row = cursor.fetchone()
+            total_modules = row['count'] if row else 0
+
+            # Counts by type
+            cursor.execute("""
+                SELECT item_type, COUNT(*) as count
+                FROM indexed_items
+                GROUP BY item_type
+                ORDER BY count DESC
+            """)
+            counts_by_type = {row['item_type']: row['count'] for row in cursor.fetchall()}
+
+        # Build response
+        response = {
+            "total_items": total_items,
+            "total_modules": total_modules,
+            "counts_by_type": counts_by_type,
+            "indexing": {
+                "is_running": _indexing_status["is_running"],
+            }
+        }
+
+        # Add indexing details if running
+        if _indexing_status["is_running"]:
+            elapsed = int(time.time() - _indexing_status["start_time"])
+            response["indexing"]["elapsed_seconds"] = elapsed
+            response["indexing"]["incremental"] = _indexing_status["incremental"]
+            if _indexing_status["modules"]:
+                response["indexing"]["modules"] = _indexing_status["modules"]
+
+        return response
+
+    except Exception as e:
+        logger.error(f"Failed to get index status: {e}", exc_info=True)
+        return {
+            "error": f"Failed to get index status: {str(e)}"
+        }
+
+
 def _check_index_exists() -> bool:
     """Check if the database has any indexed items.
 
@@ -265,14 +352,24 @@ def _check_index_exists() -> bool:
 def _start_background_indexing():
     """Start background indexing process in a separate thread."""
     import threading
+    import time
 
     def run_indexing():
+        global _indexing_status
         try:
+            _indexing_status["is_running"] = True
+            _indexing_status["start_time"] = time.time()
+            _indexing_status["incremental"] = False
+            _indexing_status["modules"] = None
+
             logger.info("Starting background indexing (no index found)...")
             asyncio.run(index_odoo_codebase(incremental=False, clear_db=False))
             logger.info("Background indexing completed successfully")
         except Exception as e:
             logger.error(f"Background indexing failed: {e}", exc_info=True)
+        finally:
+            _indexing_status["is_running"] = False
+            _indexing_status["start_time"] = None
 
     thread = threading.Thread(target=run_indexing, daemon=True, name="IndexerThread")
     thread.start()
