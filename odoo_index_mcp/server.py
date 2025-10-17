@@ -173,6 +173,20 @@ def search_xml_id(
     return tools.search_xml_id(query, module, limit, offset)
 
 
+async def _run_indexing_task(incremental: bool, module_filter: Optional[list[str]], clear_db: bool):
+    """Background task to run indexing."""
+    try:
+        logger.info(f"Background indexing started (incremental={incremental}, modules={module_filter}, clear_db={clear_db})")
+        await index_odoo_codebase(
+            incremental=incremental,
+            module_filter=module_filter,
+            clear_db=clear_db
+        )
+        logger.info("Background indexing completed successfully")
+    except Exception as e:
+        logger.error(f"Background indexing failed: {e}", exc_info=True)
+
+
 @mcp.tool()
 async def update_index(
     incremental: bool = True,
@@ -181,9 +195,9 @@ async def update_index(
 ) -> dict:
     """Update the Odoo index by scanning and parsing the codebase.
 
-    This tool triggers a re-indexing of the Odoo codebase. By default, it performs
-    incremental indexing (only re-parsing changed files). Use this when you've made
-    changes to your Odoo modules and want to refresh the index.
+    This tool triggers a re-indexing of the Odoo codebase in the background. By default,
+    it performs incremental indexing (only re-parsing changed files). The function returns
+    immediately while indexing continues in the background.
 
     Args:
         incremental: If True, skip unchanged files (default: True). Set to False for full re-index.
@@ -193,7 +207,7 @@ async def update_index(
                 WARNING: This will delete all existing index data!
 
     Returns:
-        Status message indicating success or failure
+        Status message confirming indexing has started
 
     Examples:
         - Incremental update: update_index()
@@ -206,26 +220,22 @@ async def update_index(
         if modules:
             module_filter = [m.strip() for m in modules.split(',')]
 
-        logger.info(f"Starting index update (incremental={incremental}, modules={module_filter}, clear_db={clear_db})")
+        # Start indexing as a background task
+        asyncio.create_task(_run_indexing_task(incremental, module_filter, clear_db))
 
-        # Run indexing directly (already in async context)
-        await index_odoo_codebase(
-            incremental=incremental,
-            module_filter=module_filter,
-            clear_db=clear_db
-        )
-
-        message = "Index update completed successfully"
+        message = "Index update started in background"
         if module_filter:
             message += f" for modules: {', '.join(module_filter)}"
+        message += ". Check server logs for progress."
 
         logger.info(message)
         return {
             "success": True,
+            "status": "started",
             "message": message
         }
     except Exception as e:
-        error_msg = f"Index update failed: {str(e)}"
+        error_msg = f"Failed to start index update: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return {
             "success": False,
