@@ -1,6 +1,6 @@
 [project]
 name = "odoo-index-mcp"
-version = "0.1.5"
+version = "0.1.6"
 description = "Lightweight MCP server for indexing Odoo code"
 readme = "README.md"
 requires-python = ">=3.10"
