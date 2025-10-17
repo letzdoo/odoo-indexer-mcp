@@ -294,6 +294,7 @@ def get_index_status() -> dict:
     """Get the current status of the index and any ongoing indexing operations.
 
     Returns information about:
+    - Database location
     - Whether indexing is currently running
     - Total number of indexed items
     - Number of modules indexed
@@ -301,7 +302,7 @@ def get_index_status() -> dict:
     - Indexing progress (if running)
 
     Returns:
-        Status information including item counts and indexing state
+        Status information including database path, item counts and indexing state
     """
     try:
         import time
@@ -332,6 +333,7 @@ def get_index_status() -> dict:
 
         # Build response
         response = {
+            "database_path": str(config.SQLITE_DB_PATH.resolve()),
             "total_items": total_items,
             "total_modules": total_modules,
             "counts_by_type": counts_by_type,
