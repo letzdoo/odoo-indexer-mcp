@@ -28,7 +28,7 @@ def search_odoo_index(
     limit: int = 20,
     offset: int = 0
 ) -> dict:
-    """Search for indexed Odoo elements.
+    """Search for indexed Odoo elements (returns concise results).
 
     Args:
         query: Search term (supports SQL LIKE patterns with %)
@@ -39,7 +39,7 @@ def search_odoo_index(
         offset: Number of results to skip for pagination (default: 0)
 
     Returns:
-        Search results with references and pagination info
+        Concise search results with only essential info (file location of definition)
     """
     db = get_db()
 
@@ -51,12 +51,47 @@ def search_odoo_index(
         all_items = db.search_items(query, item_type, module, parent_name, limit=999999)
         total = len(all_items)
 
+        # Return concise results - only definition location
+        concise_results = []
+        for item in items:
+            # Find the definition reference
+            definition_ref = next(
+                (ref for ref in item['references'] if ref['type'] == 'definition'),
+                item['references'][0] if item['references'] else None
+            )
+
+            concise_item = {
+                'name': item['name'],
+                'type': item['item_type'],
+                'module': item['module'],
+            }
+
+            if item['parent_name']:
+                concise_item['parent'] = item['parent_name']
+
+            if definition_ref:
+                concise_item['file'] = definition_ref['file']
+                concise_item['line'] = definition_ref['line']
+
+            # Add key attributes only (description, type info)
+            attrs = item.get('attributes', {})
+            if 'description' in attrs:
+                concise_item['description'] = attrs['description']
+            if 'field_type' in attrs:
+                concise_item['field_type'] = attrs['field_type']
+            if 'model_type' in attrs:
+                concise_item['model_type'] = attrs['model_type']
+            if 'view_type' in attrs:
+                concise_item['view_type'] = attrs['view_type']
+
+            concise_results.append(concise_item)
+
         return {
             'total': total,
             'limit': limit,
             'offset': offset,
-            'returned': len(items),
-            'results': items
+            'returned': len(concise_results),
+            'results': concise_results
         }
     except Exception as e:
         logger.error(f"Error searching index: {e}")

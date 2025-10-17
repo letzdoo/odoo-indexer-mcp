@@ -28,23 +28,29 @@ def search_odoo_index(
     item_type: Optional[str] = None,
     module: Optional[str] = None,
     parent_name: Optional[str] = None,
-    limit: int = 20,
+    limit: int = 10,
     offset: int = 0
 ) -> dict:
-    """Search for indexed Odoo elements by name.
+    """Search for indexed Odoo elements by name (returns CONCISE results).
+
+    This tool returns minimal, essential information only:
+    - name, type, module, file, line number
+    - Key attributes (description, field_type, etc.)
+
+    Use get_item_details() if you need full details about a specific item.
 
     Args:
         query: Search term (supports SQL LIKE patterns with %)
-        item_type: Filter by type (model/field/function/view/menu/action/controller_route/access_right/record_rule/scheduled_action/report_template/module/xml_id)
+        item_type: Filter by type (model/field/function/view/menu/action/etc)
         module: Filter by module name
         parent_name: Filter by parent (e.g., model name for fields/methods)
-        limit: Maximum results per page (default: 20, max: 100)
+        limit: Maximum results per page (default: 10, max: 50)
         offset: Number of results to skip for pagination (default: 0)
 
     Returns:
-        Search results with file locations, line numbers, and pagination info
+        Concise search results with file locations and key info only
     """
-    limit = min(limit, 100)  # Cap at 100
+    limit = min(limit, 50)  # Cap at 50
     return tools.search_odoo_index(query, item_type, module, parent_name, limit, offset)
 
 
@@ -55,7 +61,16 @@ def get_item_details(
     parent_name: Optional[str] = None,
     module: Optional[str] = None
 ) -> dict:
-    """Get complete details for a specific Odoo element.
+    """Get FULL details for a specific Odoo element.
+
+    WARNING: This returns ALL information including ALL references, ALL fields, ALL methods,
+    ALL views, etc. for models. Use search_odoo_index() for quick lookups.
+
+    Use this ONLY when you specifically need:
+    - All references (inheritance, overrides, usages)
+    - All fields/methods of a model
+    - All views/actions related to a model
+    - Full attribute details
 
     Args:
         item_type: Type of item (model/field/function/view/menu/action/etc)
@@ -64,7 +79,7 @@ def get_item_details(
         module: Module name (optional, helps disambiguate)
 
     Returns:
-        Item details with all references and related items
+        Complete item details with all references and related items
     """
     return tools.get_item_details(item_type, name, parent_name, module)
 
