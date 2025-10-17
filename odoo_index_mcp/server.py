@@ -174,7 +174,7 @@ def search_xml_id(
 
 
 @mcp.tool()
-def update_index(
+async def update_index(
     incremental: bool = True,
     modules: Optional[str] = None,
     clear_db: bool = False
@@ -208,13 +208,11 @@ def update_index(
 
         logger.info(f"Starting index update (incremental={incremental}, modules={module_filter}, clear_db={clear_db})")
 
-        # Run indexing in asyncio event loop
-        asyncio.run(
-            index_odoo_codebase(
-                incremental=incremental,
-                module_filter=module_filter,
-                clear_db=clear_db
-            )
+        # Run indexing directly (already in async context)
+        await index_odoo_codebase(
+            incremental=incremental,
+            module_filter=module_filter,
+            clear_db=clear_db
         )
 
         message = "Index update completed successfully"
