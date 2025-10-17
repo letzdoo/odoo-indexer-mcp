@@ -4,7 +4,7 @@ import asyncio
 import hashlib
 import logging
 import os
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -92,11 +92,11 @@ class OdooIndexer:
 
         logger.info(f"Found {len(modules)} modules to index")
 
-        # Create persistent process pool
+        # Create persistent thread pool (ThreadPool is more compatible with asyncio/uvloop)
         max_workers = config.MAX_WORKER_PROCESSES if config.MAX_WORKER_PROCESSES > 0 else os.cpu_count()
-        logger.info(f"Creating process pool with {max_workers} workers")
+        logger.info(f"Creating thread pool with {max_workers} workers")
 
-        self.process_pool = ProcessPoolExecutor(max_workers=max_workers)
+        self.process_pool = ThreadPoolExecutor(max_workers=max_workers)
 
         try:
             # Index modules concurrently
@@ -123,8 +123,8 @@ class OdooIndexer:
 
             await asyncio.gather(*tasks)
         finally:
-            # Shutdown process pool
-            logger.info("Shutting down process pool")
+            # Shutdown thread pool
+            logger.info("Shutting down thread pool")
             self.process_pool.shutdown(wait=True)
             self.process_pool = None
 
@@ -206,13 +206,17 @@ class OdooIndexer:
 
             logger.info(f"[PARSING] Module {module_name}: {len(files_to_index)} files")
 
-            # Parse all files in parallel using the persistent process pool
+            # Parse all files in parallel using the persistent thread pool
             loop = asyncio.get_running_loop()
             parse_tasks = [
                 loop.run_in_executor(self.process_pool, _parse_file_worker, file_path, module_name)
                 for file_path in files_to_index
             ]
-            results = await asyncio.gather(*parse_tasks, return_exceptions=True)
+            try:
+                results = await asyncio.gather(*parse_tasks, return_exceptions=True)
+            except Exception as e:
+                logger.error(f"[ERROR] Failed to gather parse results for {module_name}: {e}", exc_info=True)
+                raise
 
             logger.info(f"[PARSED] Module {module_name}: {len(results)} results")
 
