@@ -1,11 +1,14 @@
 """FastMCP server for Odoo index."""
 
+import asyncio
 import logging
 from typing import Optional
 
 from fastmcp import FastMCP
 
-from . import tools
+from . import config, tools
+from .database import Database
+from .indexer import index_odoo_codebase
 
 # Configure logging
 logging.basicConfig(
@@ -170,9 +173,116 @@ def search_xml_id(
     return tools.search_xml_id(query, module, limit, offset)
 
 
+@mcp.tool()
+def update_index(
+    incremental: bool = True,
+    modules: Optional[str] = None,
+    clear_db: bool = False
+) -> dict:
+    """Update the Odoo index by scanning and parsing the codebase.
+
+    This tool triggers a re-indexing of the Odoo codebase. By default, it performs
+    incremental indexing (only re-parsing changed files). Use this when you've made
+    changes to your Odoo modules and want to refresh the index.
+
+    Args:
+        incremental: If True, skip unchanged files (default: True). Set to False for full re-index.
+        modules: Comma-separated list of module names to index (e.g., "sale,account,stock").
+                If not provided, all modules will be indexed.
+        clear_db: If True, clear the entire database before indexing (default: False).
+                WARNING: This will delete all existing index data!
+
+    Returns:
+        Status message indicating success or failure
+
+    Examples:
+        - Incremental update: update_index()
+        - Full re-index: update_index(incremental=False)
+        - Index specific modules: update_index(modules="sale,account")
+        - Clear and re-index: update_index(clear_db=True, incremental=False)
+    """
+    try:
+        module_filter = None
+        if modules:
+            module_filter = [m.strip() for m in modules.split(',')]
+
+        logger.info(f"Starting index update (incremental={incremental}, modules={module_filter}, clear_db={clear_db})")
+
+        # Run indexing in asyncio event loop
+        asyncio.run(
+            index_odoo_codebase(
+                incremental=incremental,
+                module_filter=module_filter,
+                clear_db=clear_db
+            )
+        )
+
+        message = "Index update completed successfully"
+        if module_filter:
+            message += f" for modules: {', '.join(module_filter)}"
+
+        logger.info(message)
+        return {
+            "success": True,
+            "message": message
+        }
+    except Exception as e:
+        error_msg = f"Index update failed: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {
+            "success": False,
+            "error": error_msg
+        }
+
+
+def _check_index_exists() -> bool:
+    """Check if the database has any indexed items.
+
+    Returns:
+        True if index exists and has data, False otherwise
+    """
+    try:
+        db = Database(config.SQLITE_DB_PATH)
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) as count FROM indexed_items")
+            row = cursor.fetchone()
+            count = row['count'] if row else 0
+            return count > 0
+    except Exception as e:
+        logger.warning(f"Could not check index status: {e}")
+        return False
+
+
+def _start_background_indexing():
+    """Start background indexing process in a separate thread."""
+    import threading
+
+    def run_indexing():
+        try:
+            logger.info("Starting background indexing (no index found)...")
+            asyncio.run(index_odoo_codebase(incremental=False, clear_db=False))
+            logger.info("Background indexing completed successfully")
+        except Exception as e:
+            logger.error(f"Background indexing failed: {e}", exc_info=True)
+
+    thread = threading.Thread(target=run_indexing, daemon=True, name="IndexerThread")
+    thread.start()
+    logger.info("Background indexing thread started")
+
+
 def main():
     """Run the MCP server."""
     logger.info("Starting Odoo Index MCP server")
+
+    # Check if index exists
+    if not _check_index_exists():
+        logger.warning("No index found in database. Starting background indexing...")
+        _start_background_indexing()
+        logger.info("Server will continue to start while indexing runs in background")
+    else:
+        logger.info("Index found in database")
+
     mcp.run()
 
 
