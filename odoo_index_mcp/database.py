@@ -22,6 +22,8 @@ class Database:
             db_path: Path to SQLite database file
         """
         self.db_path = db_path
+        # Create parent directory if it doesn't exist
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._pool: Optional['AsyncConnectionPool'] = None
         self._init_schema()
 
