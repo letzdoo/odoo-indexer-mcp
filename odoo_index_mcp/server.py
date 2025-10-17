@@ -28,7 +28,7 @@ def search_odoo_index(
     item_type: Optional[str] = None,
     module: Optional[str] = None,
     parent_name: Optional[str] = None,
-    limit: int = 10,
+    limit: int = 5,
     offset: int = 0
 ) -> dict:
     """Search for indexed Odoo elements by name (returns CONCISE results).
@@ -36,6 +36,9 @@ def search_odoo_index(
     This tool returns minimal, essential information only:
     - name, type, module, file, line number
     - Key attributes (description, field_type, etc.)
+
+    Results are sorted by relevance (exact matches first, then by dependency depth).
+    The most relevant results are typically in the first 5 items.
 
     Use get_item_details() if you need full details about a specific item.
 
@@ -47,7 +50,7 @@ def search_odoo_index(
         item_type: Filter by type (model/field/function/view/menu/action/etc)
         module: Filter by module name
         parent_name: Filter by parent (e.g., model name for fields/methods)
-        limit: Maximum results per page (default: 10, max: 50)
+        limit: Maximum results per page (default: 5, max: 50)
         offset: Number of results to skip for pagination (default: 0)
 
     Returns:
